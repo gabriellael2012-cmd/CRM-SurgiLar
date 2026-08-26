@@ -1,0 +1,6 @@
+{
+  "name": "CRM Kely Alves - SurgiLar",
+  "description": "CRM Web Premium de alto padrão para Kely Alves com gestão inteligente de clientes, orçamentos, vendas e WhatsApp para SurgiLar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
