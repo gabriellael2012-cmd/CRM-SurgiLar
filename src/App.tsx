@@ -6,6 +6,7 @@ import { ClientsView } from './components/clients/ClientsView';
 import { ClientDetailModal } from './components/clients/ClientDetailModal';
 import { ClientFormModal } from './components/clients/ClientFormModal';
 import { CatalogView } from './components/catalog/CatalogView';
+import { ProductDetailModal } from './components/catalog/ProductDetailModal';
 import { BudgetsView } from './components/budgets/BudgetsView';
 import { SalesView } from './components/sales/SalesView';
 import { RemindersView } from './components/reminders/RemindersView';
@@ -64,6 +65,7 @@ export const App: React.FC = () => {
 
   // Modals state
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedProductForDetail, setSelectedProductForDetail] = useState<CatalogProduct | null>(null);
   const [showClientForm, setShowClientForm] = useState(false);
 
   // Sync state to LocalStorage
@@ -642,6 +644,10 @@ export const App: React.FC = () => {
               if (client) setSelectedClient(client);
             }}
             onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            clients={clients}
+            catalogProducts={catalogProducts}
+            onSelectClient={(c) => setSelectedClient(c)}
+            onSelectProduct={(p) => setSelectedProductForDetail(p)}
           />
 
           {/* Main View Container */}
@@ -775,6 +781,24 @@ export const App: React.FC = () => {
           onClose={() => setShowClientForm(false)}
           onSave={handleAddClient}
           availableProducts={availableProducts}
+        />
+      )}
+
+      {/* Individual Product Detail Modal (from Search or Catalog) */}
+      {selectedProductForDetail && (
+        <ProductDetailModal
+          product={selectedProductForDetail}
+          clients={clients}
+          onClose={() => setSelectedProductForDetail(null)}
+          onSelectClient={(c) => {
+            setSelectedProductForDetail(null);
+            setSelectedClient(c);
+          }}
+          onAssignProductToClient={handleAssignCatalogProductToClient}
+          onEditProduct={(p) => {
+            setSelectedProductForDetail(null);
+            setActiveTab('catalog');
+          }}
         />
       )}
     </div>

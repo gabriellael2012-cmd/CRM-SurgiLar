@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { CatalogProduct, ProductCategory, Client } from '../../types/crm';
 import { WhatsAppButton } from '../common/WhatsAppButton';
+import { ProductDetailModal } from './ProductDetailModal';
 
 interface CatalogViewProps {
   catalogProducts: CatalogProduct[];
@@ -531,167 +532,22 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
       </AnimatePresence>
 
       {/* MODAL 2: Visualizar Detalhes do Produto */}
-      <AnimatePresence>
-        {detailProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 15 }}
-              className="relative w-full max-w-xl bg-[#121217] border border-rose-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              {/* Header */}
-              <div className="p-5 border-b border-zinc-800 bg-[#16141e] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-600 to-pink-600 flex items-center justify-center text-white shadow-lg shadow-rose-600/30">
-                    <Layers className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
-                      Detalhes do Produto
-                    </span>
-                    <h3 className="text-base font-bold text-white font-display">
-                      {detailProduct.name}
-                    </h3>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setDetailProduct(null)}
-                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="p-6 overflow-y-auto space-y-5 text-xs flex-1">
-                {/* Details Grid */}
-                <div className="grid grid-cols-2 gap-3 p-4 bg-zinc-900/70 rounded-xl border border-zinc-800">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
-                      Categoria:
-                    </span>
-                    <span className="text-xs font-semibold text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
-                      {detailProduct.category}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
-                      Material / Acabamento:
-                    </span>
-                    <span className="text-xs font-semibold text-zinc-200">
-                      {detailProduct.material}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 pt-2 border-t border-zinc-800">
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
-                      Descrição & Especificações:
-                    </span>
-                    <p className="text-xs text-zinc-300 leading-relaxed">
-                      {detailProduct.description ||
-                        'Mobiliário de alto padrão da Linha SurgiLar com estrutura reforçada e acabamento artesanal de máxima durabilidade.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Clients interested section */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5" />
-                      Clientes com Interesse neste Item (
-                      {(productInterestMap[detailProduct.name] || []).length})
-                    </h4>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const p = detailProduct;
-                        setDetailProduct(null);
-                        setAssignProduct(p);
-                      }}
-                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold"
-                    >
-                      + Vincular a mais clientes
-                    </button>
-                  </div>
-
-                  {(productInterestMap[detailProduct.name] || []).length === 0 ? (
-                    <div className="p-5 text-center bg-zinc-900/40 rounded-xl border border-dashed border-zinc-800 text-zinc-400">
-                      Nenhum cliente possui este produto como interesse ainda.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {(productInterestMap[detailProduct.name] || []).map((c) => (
-                        <div
-                          key={c.id}
-                          className="p-3 bg-zinc-900/80 rounded-xl border border-zinc-800 flex items-center justify-between"
-                        >
-                          <div>
-                            <p className="font-bold text-white">{c.name}</p>
-                            <p className="text-[11px] text-zinc-400 font-mono">
-                              {c.whatsapp} {c.city ? `• ${c.city}` : ''}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <WhatsAppButton
-                              phone={c.whatsapp}
-                              clientName={c.name}
-                              productName={detailProduct.name}
-                              size="sm"
-                            />
-                            {onSelectClient && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDetailProduct(null);
-                                  onSelectClient(c);
-                                }}
-                                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs"
-                              >
-                                Ver Perfil
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-zinc-800 bg-[#0e0e13] flex justify-between items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = detailProduct;
-                    setDetailProduct(null);
-                    handleOpenEdit(p);
-                  }}
-                  className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold flex items-center gap-1.5"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Editar Produto</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDetailProduct(null)}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow-md"
-                >
-                  Fechar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {detailProduct && (
+        <ProductDetailModal
+          product={detailProduct}
+          clients={clients}
+          onClose={() => setDetailProduct(null)}
+          onSelectClient={(c) => {
+            setDetailProduct(null);
+            onSelectClient?.(c);
+          }}
+          onAssignProductToClient={onAssignProductToClient}
+          onEditProduct={(p) => {
+            setDetailProduct(null);
+            handleOpenEdit(p);
+          }}
+        />
+      )}
 
       {/* MODAL 3: Cadastrar ou Editar Produto */}
       <AnimatePresence>
