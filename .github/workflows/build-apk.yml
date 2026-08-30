@@ -26,7 +26,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Instalar Dependências
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Dependências (npm ci)
         run: npm ci
 
       - name: Compilar Frontend Vite
@@ -35,19 +38,18 @@ jobs:
       - name: Sincronizar Capacitor Android
         run: npx cap sync android
 
-      - name: Permissão de Execução no Gradle Wrapper
+      - name: Configurar e Executar Gradle Wrapper
         run: |
           cd android
-          chmod +x gradlew || true
-
-      - name: Compilar APK Debug
-        run: |
-          cd android
-          ./gradlew assembleDebug || gradle assembleDebug
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.2.1
+          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Salvar APK como Artefato de Download
         uses: actions/upload-artifact@v4
         with:
           name: CRM-Kely-Alves-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: warn
+          if-no-files-found: error
