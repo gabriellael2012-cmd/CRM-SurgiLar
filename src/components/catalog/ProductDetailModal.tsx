@@ -28,6 +28,15 @@ interface ProductDetailModalProps {
   onEditProduct?: (product: CatalogProduct) => void;
 }
 
+// Helper for accent-insensitive and case-insensitive comparison
+const normalizeText = (text: string): string => {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+};
+
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   clients,
@@ -47,26 +56,35 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   // Find all clients who have this product in productsOfInterest
   const interestedClients = useMemo(() => {
-    const prodNameLower = product.name.toLowerCase().trim();
+    const normProdName = normalizeText(product.name);
     return clients.filter((c) =>
-      c.productsOfInterest?.some(
-        (p) =>
-          p.toLowerCase().trim() === prodNameLower ||
-          prodNameLower.includes(p.toLowerCase().trim()) ||
-          p.toLowerCase().trim().includes(prodNameLower)
-      )
+      c.productsOfInterest?.some((p) => {
+        const normP = normalizeText(p);
+        return (
+          normP === normProdName ||
+          normProdName.includes(normP) ||
+          normP.includes(normProdName)
+        );
+      })
     );
   }, [clients, product.name]);
 
   // Clients available to assign (filtered by search)
   const assignableClients = useMemo(() => {
-    const query = assignSearchQuery.toLowerCase().trim();
+    const rawQuery = assignSearchQuery.trim();
+    if (!rawQuery) return clients;
+    const normQuery = normalizeText(rawQuery);
+    const digitsQuery = rawQuery.replace(/\D/g, '');
+
     return clients.filter((c) => {
-      if (!query) return true;
+      const normName = normalizeText(c.name);
+      const cleanPhone = (c.whatsapp || '').replace(/\D/g, '');
+      const normCity = normalizeText(c.city || '');
+
       return (
-        c.name.toLowerCase().includes(query) ||
-        c.whatsapp.includes(query) ||
-        c.city?.toLowerCase().includes(query)
+        normName.includes(normQuery) ||
+        (digitsQuery.length > 0 && cleanPhone.includes(digitsQuery)) ||
+        normCity.includes(normQuery)
       );
     });
   }, [clients, assignSearchQuery]);

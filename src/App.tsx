@@ -46,7 +46,14 @@ import {
   saveNotifications,
   resetToInitialData
 } from './utils/storage';
+import { SplashScreen } from './components/common/SplashScreen';
 import { formatCurrency } from './utils/formatters';
+import {
+  playNotificationChime,
+  triggerHapticVibration,
+  sendNativeNotification,
+  evaluateSmartNotifications
+} from './utils/notifications';
 
 export const App: React.FC = () => {
   // Navigation & UI state
@@ -97,6 +104,38 @@ export const App: React.FC = () => {
     saveNotifications(notifications);
   }, [notifications]);
 
+  // Automated Smart Notification Engine (Birthdays, Remarketing, Overdue Tasks)
+  useEffect(() => {
+    const generated = evaluateSmartNotifications(clients, reminders, settings, notifications);
+    if (generated.length > 0) {
+      setNotifications((prev) => [...generated, ...prev]);
+      if (settings.notificationPreferences?.soundEnabled !== false) {
+        playNotificationChime();
+      }
+      if (settings.notificationPreferences?.vibrationEnabled !== false) {
+        triggerHapticVibration([100, 50, 100]);
+      }
+    }
+  }, [clients, reminders, settings]);
+
+  // Android Hardware / Browser Back Navigation Integration
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (selectedClient) {
+        setSelectedClient(null);
+      } else if (showClientForm) {
+        setShowClientForm(false);
+      } else if (selectedProductForDetail) {
+        setSelectedProductForDetail(null);
+      } else if (activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedClient, showClientForm, selectedProductForDetail, activeTab]);
+
   // Calculations for Today's reminders badge
   const todayStr = new Date().toISOString().split('T')[0];
   const todayRemindersCount = useMemo(() => {
@@ -111,6 +150,32 @@ export const App: React.FC = () => {
     // Also register any initial reminders into the global reminders table
     if (newClient.reminders && newClient.reminders.length > 0) {
       setReminders((prev) => [...newClient.reminders!, ...prev]);
+    }
+
+    // Smart Notification: New Client Registered
+    if (settings.notificationPreferences?.newClient !== false) {
+      const newNotif: AppNotification = {
+        id: `notif-client-${Date.now()}`,
+        title: '👤 Novo Cliente Cadastrado!',
+        message: `${newClient.name} foi adicionado(a) com sucesso à sua base de clientes.`,
+        time: 'Agora',
+        type: 'system',
+        read: false,
+        clientId: newClient.id,
+        clientName: newClient.name,
+        badge: 'Novo Cliente'
+      };
+      setNotifications((prev) => [newNotif, ...prev]);
+
+      if (settings.notificationPreferences?.soundEnabled !== false) {
+        playNotificationChime();
+      }
+      if (settings.notificationPreferences?.vibrationEnabled !== false) {
+        triggerHapticVibration([80, 40, 80]);
+      }
+      sendNativeNotification('Novo Cliente no CRM Kely Alves', {
+        body: `${newClient.name} cadastrado com sucesso!`
+      });
     }
   };
 
@@ -591,6 +656,9 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#08080c] text-zinc-100 flex flex-col font-sans selection:bg-rose-500 selection:text-white">
+      {/* Luxury Splash Screen on Mobile and Desktop Launch */}
+      <SplashScreen />
+
       {/* Background ambient lighting effects */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-rose-600/10 rounded-full blur-[140px]" />
@@ -662,6 +730,10 @@ export const App: React.FC = () => {
                 onNavigateToClients={() => setActiveTab('clients')}
                 onNavigateToReminders={() => setActiveTab('reminders')}
                 onNavigateToSales={() => setActiveTab('sales')}
+                onNavigateToBudgets={() => setActiveTab('budgets')}
+                onNavigateToBirthdays={() => setActiveTab('clients')}
+                onNavigateToScripts={() => setActiveTab('tutorial')}
+                onToggleReminder={handleToggleReminder}
               />
             )}
 
@@ -730,7 +802,9 @@ export const App: React.FC = () => {
               <ScheduleView
                 reminders={reminders}
                 clients={clients}
-                onAddReminder={() => setActiveTab('reminders')}
+                onAddReminder={handleAddReminder}
+                onToggleReminder={handleToggleReminder}
+                onDeleteReminder={handleDeleteReminder}
                 onSelectClient={(c) => setSelectedClient(c)}
               />
             )}

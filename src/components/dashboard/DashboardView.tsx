@@ -7,21 +7,17 @@ import {
   Sparkles,
   ChevronRight,
   MessageCircle,
-  PartyPopper,
-  Calendar,
-  Gift,
-  AlertCircle,
   Plus,
   CheckCircle2,
-  ArrowRight,
-  ExternalLink,
   MessageSquareHeart,
   TrendingUp,
-  PackageCheck
+  PackageCheck,
+  DollarSign,
+  BadgePercent,
+  Layers
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { Client, SaleRecord, ReminderRecord } from '../../types/crm';
-import { getBirthdayInfo, getDaysSinceLastPurchase, formatDate, formatCurrency, STATUS_CONFIG } from '../../utils/formatters';
+import { getBirthdayInfo, getDaysSinceLastPurchase, formatDate, formatCurrency } from '../../utils/formatters';
 import { ALL_WHATSAPP_SCRIPTS, prepareScriptMessage, getWhatsAppUrl } from '../../utils/whatsapp';
 
 interface DashboardViewProps {
@@ -32,6 +28,7 @@ interface DashboardViewProps {
   onNavigateToClients: () => void;
   onNavigateToReminders: () => void;
   onNavigateToSales: () => void;
+  onNavigateToBudgets?: () => void;
   onNavigateToBirthdays?: () => void;
   onNavigateToScripts?: () => void;
   onAddClient: () => void;
@@ -46,6 +43,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToClients,
   onNavigateToReminders,
   onNavigateToSales,
+  onNavigateToBudgets,
   onNavigateToBirthdays,
   onNavigateToScripts,
   onAddClient,
@@ -53,7 +51,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Birthday processing
+  // 1. Core Financial & Funnel Metrics
+  const totalRevenue = useMemo(() => sales.reduce((sum, s) => sum + (s.value || 0), 0), [sales]);
+  const totalBudgetsCount = useMemo(
+    () => clients.reduce((acc, c) => acc + (c.budgets?.length || 0), 0),
+    [clients]
+  );
+  const totalBudgetsValue = useMemo(
+    () => clients.reduce((acc, c) => acc + (c.budgets?.reduce((s, b) => s + b.value, 0) || 0), 0),
+    [clients]
+  );
+  const inNegotiationCount = useMemo(
+    () =>
+      clients.filter(
+        (c) =>
+          c.status === 'negociacao' ||
+          c.status === 'orcamento_enviado' ||
+          c.status === 'aguardando_resposta'
+      ).length,
+    [clients]
+  );
+
+  // 2. Birthday processing
   const birthdayClients = useMemo(() => {
     return clients
       .filter((c) => !!c.birthDate)
@@ -68,7 +87,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         (c) =>
           c.birthdayInfo.isToday ||
           c.birthdayInfo.isTomorrow ||
-          (c.birthdayInfo.daysUntil !== null && c.birthdayInfo.daysUntil >= 0 && c.birthdayInfo.daysUntil <= 7)
+          (c.birthdayInfo.daysUntil !== null &&
+            c.birthdayInfo.daysUntil >= 0 &&
+            c.birthdayInfo.daysUntil <= 7)
       )
       .sort((a, b) => (a.birthdayInfo.daysUntil ?? 999) - (b.birthdayInfo.daysUntil ?? 999));
   }, [clients]);
@@ -77,7 +98,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return clients.filter((c) => c.birthDate && getBirthdayInfo(c.birthDate).isToday).length;
   }, [clients]);
 
-  // 2. Clients without purchases or inactive (> 30 days)
+  // 3. Clients without purchases or inactive (> 30 days)
   const inactiveClients = useMemo(() => {
     return clients
       .map((c) => {
@@ -91,17 +112,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .sort((a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0));
   }, [clients]);
 
-  // 3. Reminders for today & pending
+  // 4. Reminders for today & pending
   const todayReminders = useMemo(() => {
     return reminders.filter((r) => !r.completed && r.date <= todayStr);
   }, [reminders, todayStr]);
 
-  // Birthday script
+  // Scripts
   const birthdayScript =
     ALL_WHATSAPP_SCRIPTS.find((s) => s.type === 'birthday')?.template ||
     'Olá, [NOME]! 🎉 Passando para desejar um feliz aniversário! Que seu novo ciclo seja repleto de coisas boas, saúde e muitos momentos especiais. Um grande abraço da Kely e da SurgiLar! 💗';
 
-  // Reactivation script
   const reactivationScript =
     ALL_WHATSAPP_SCRIPTS.find((s) => s.type === 'reactivation')?.template ||
     'Olá, [NOME]! Como você está? Lembrei de você hoje e passei para saber se está precisando de algo novo para seu espaço ou manutenção dos seus móveis SurgiLar! 🌸';
@@ -129,7 +149,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Olá, Kely! 💗
             </h2>
             <p className="text-zinc-300 text-sm mt-1 max-w-xl font-medium">
-              Aqui está o resumo dos seus clientes, aniversários e lembretes para facilitar seu dia.
+              Seu CRM está 100% pronto para novos cadastros, orçamentos e atendimentos da SurgiLar.
             </p>
           </div>
 
@@ -140,141 +160,220 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="px-4 py-2.5 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-pink-600/30 border border-pink-400/40 transition-all flex items-center gap-2 transform active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Novo Cliente</span>
+              <span>+ Adicionar Cliente</span>
             </button>
 
-            {onNavigateToBirthdays && (
-              <button
-                type="button"
-                onClick={onNavigateToBirthdays}
-                className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-pink-300 text-xs font-bold rounded-xl border border-pink-500/30 hover:border-pink-500/60 transition-all flex items-center gap-2"
-              >
-                <Cake className="w-4 h-4 text-pink-400" />
-                <span>Aniversários ({birthdayClients.length})</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onNavigateToSales}
+              className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-emerald-300 text-xs font-bold rounded-xl border border-emerald-500/30 hover:border-emerald-500/60 transition-all flex items-center gap-2"
+            >
+              <PackageCheck className="w-4 h-4 text-emerald-400" />
+              <span>+ Nova Venda</span>
+            </button>
 
-            {onNavigateToScripts && (
-              <button
-                type="button"
-                onClick={onNavigateToScripts}
-                className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700 hover:border-pink-500/30 transition-all flex items-center gap-2"
-              >
-                <MessageSquareHeart className="w-4 h-4 text-rose-400" />
-                <span>Scripts WhatsApp</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onNavigateToReminders}
+              className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-rose-300 text-xs font-bold rounded-xl border border-rose-500/30 hover:border-rose-500/60 transition-all flex items-center gap-2"
+            >
+              <BellRing className="w-4 h-4 text-rose-400" />
+              <span>+ Criar Lembrete</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* 4 Cards de Métricas Principais */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 lg:gap-4">
+      {/* 6 Indicadores Principais do CRM */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {/* 1. 👥 Clientes */}
         <div
           onClick={onNavigateToClients}
-          className="glass-panel glass-panel-hover rounded-2xl p-5 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-pink-500/40 relative overflow-hidden group"
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-pink-500/40 relative overflow-hidden group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
               👥 Clientes
             </span>
-            <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-400 group-hover:scale-110 transition-transform">
-              <Users className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-400 group-hover:scale-110 transition-transform">
+              <Users className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white font-display">
+          <div className="mt-3">
+            <div className="text-2xl font-extrabold text-white font-display">
               {clients.length}
             </div>
-            <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1 group-hover:text-pink-300 transition-colors">
-              <span>Cadastrados no CRM</span>
+            <p className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1 group-hover:text-pink-300 transition-colors">
+              <span>Cadastrados</span>
               <ChevronRight className="w-3 h-3" />
             </p>
           </div>
         </div>
 
-        {/* 2. 🎂 Aniversários */}
+        {/* 2. 💵 Faturamento */}
         <div
-          onClick={onNavigateToBirthdays || onNavigateToClients}
-          className="glass-panel glass-panel-hover rounded-2xl p-5 cursor-pointer flex flex-col justify-between border border-pink-500/30 bg-gradient-to-b from-[#1b101c] to-[#121217] relative overflow-hidden group"
+          onClick={onNavigateToSales}
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-emerald-500/40 relative overflow-hidden group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-pink-300">
-              🎂 Aniversários
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+              💵 Faturamento
             </span>
-            <div className="p-2.5 rounded-xl bg-pink-500/20 text-pink-300 group-hover:scale-110 transition-transform">
-              <Cake className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+              <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-pink-400 font-display flex items-center gap-2">
+          <div className="mt-3">
+            <div className="text-xl font-extrabold text-emerald-300 font-mono truncate">
+              {formatCurrency(totalRevenue)}
+            </div>
+            <p className="text-[11px] text-emerald-400/80 mt-0.5 flex items-center gap-1">
+              <span>{sales.length} {sales.length === 1 ? 'venda' : 'vendas'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </p>
+          </div>
+        </div>
+
+        {/* 3. 💰 Orçamentos */}
+        <div
+          onClick={onNavigateToBudgets || onNavigateToClients}
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-amber-500/40 relative overflow-hidden group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+              💰 Orçamentos
+            </span>
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
+              <BadgePercent className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-extrabold text-white font-display">
+              {totalBudgetsCount}
+            </div>
+            <p className="text-[11px] text-amber-400/80 mt-0.5 flex items-center gap-1">
+              <span>{formatCurrency(totalBudgetsValue)}</span>
+              <ChevronRight className="w-3 h-3" />
+            </p>
+          </div>
+        </div>
+
+        {/* 4. 💬 Negociações */}
+        <div
+          onClick={onNavigateToClients}
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-cyan-500/40 relative overflow-hidden group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+              💬 Negociações
+            </span>
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 group-hover:scale-110 transition-transform">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-extrabold text-white font-display">
+              {inNegotiationCount}
+            </div>
+            <p className="text-[11px] text-cyan-400/80 mt-0.5 flex items-center gap-1">
+              <span>Em andamento</span>
+              <ChevronRight className="w-3 h-3" />
+            </p>
+          </div>
+        </div>
+
+        {/* 5. 🔔 Lembretes */}
+        <div
+          onClick={onNavigateToReminders}
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-rose-500/40 relative overflow-hidden group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300">
+              🔔 Lembretes
+            </span>
+            <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 group-hover:scale-110 transition-transform">
+              <BellRing className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-extrabold text-white font-display">
+              {todayReminders.length}
+            </div>
+            <p className="text-[11px] text-rose-300/80 mt-0.5 flex items-center gap-1">
+              <span>Pendentes hoje</span>
+              <ChevronRight className="w-3 h-3" />
+            </p>
+          </div>
+        </div>
+
+        {/* 6. 🎂 Aniversários */}
+        <div
+          onClick={onNavigateToBirthdays || onNavigateToClients}
+          className="glass-panel glass-panel-hover rounded-2xl p-4 cursor-pointer flex flex-col justify-between border border-pink-500/30 bg-gradient-to-b from-[#1b101c] to-[#121217] relative overflow-hidden group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-pink-300">
+              🎂 Aniversários
+            </span>
+            <div className="p-2 rounded-xl bg-pink-500/20 text-pink-300 group-hover:scale-110 transition-transform">
+              <Cake className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-extrabold text-pink-400 font-display flex items-center gap-1.5">
               {birthdayClients.length}
               {birthdaysTodayCount > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500 text-white animate-pulse">
-                  {birthdaysTodayCount} HOJE!
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500 text-white animate-pulse">
+                  {birthdaysTodayCount} hoje
                 </span>
               )}
             </div>
-            <p className="text-xs text-pink-300/80 mt-1 flex items-center gap-1">
+            <p className="text-[11px] text-pink-300/80 mt-0.5 flex items-center gap-1">
               <span>Próximos 7 dias</span>
               <ChevronRight className="w-3 h-3" />
             </p>
           </div>
         </div>
-
-        {/* 3. ⏱️ Clientes sem comprar */}
-        <div
-          onClick={onNavigateToClients}
-          className="glass-panel glass-panel-hover rounded-2xl p-5 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-amber-500/40 relative overflow-hidden group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-              ⏱️ Sem Comprar
-            </span>
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white font-display">
-              {inactiveClients.length}
-            </div>
-            <p className="text-xs text-amber-400/80 mt-1 flex items-center gap-1 group-hover:text-amber-300 transition-colors">
-              <span>Há 30+ dias sem comprar</span>
-              <ChevronRight className="w-3 h-3" />
-            </p>
-          </div>
-        </div>
-
-        {/* 4. 🔔 Lembretes */}
-        <div
-          onClick={onNavigateToReminders}
-          className="glass-panel glass-panel-hover rounded-2xl p-5 cursor-pointer flex flex-col justify-between border border-zinc-800/80 hover:border-rose-500/40 relative overflow-hidden group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-300">
-              🔔 Lembretes
-            </span>
-            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400 group-hover:scale-110 transition-transform">
-              <BellRing className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white font-display">
-              {todayReminders.length}
-            </div>
-            <p className="text-xs text-rose-300/80 mt-1 flex items-center gap-1 group-hover:text-rose-300 transition-colors">
-              <span>Para hoje ou pendentes</span>
-              <ChevronRight className="w-3 h-3" />
-            </p>
-          </div>
-        </div>
       </div>
+
+      {/* Empty State Banner if no clients yet */}
+      {clients.length === 0 && (
+        <div className="p-8 sm:p-10 rounded-2xl bg-gradient-to-b from-[#16121b] to-[#100e14] border border-dashed border-pink-500/30 text-center space-y-4 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 mx-auto shadow-inner">
+            <Users className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-lg font-bold text-white font-display">
+              Você ainda não possui clientes cadastrados.
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Comece adicionando seu primeiro cliente para gerenciar negociações, enviar propostas de produtos da SurgiLar e acompanhar follow-ups automáticos.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onAddClient}
+              className="px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-pink-600/30 flex items-center gap-2 transition-transform active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Adicionar Cliente</span>
+            </button>
+            <button
+              type="button"
+              onClick={onNavigateToSales}
+              className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700 hover:border-pink-500/40 flex items-center gap-2 transition-all"
+            >
+              <PackageCheck className="w-4 h-4 text-emerald-400" />
+              <span>+ Nova Venda</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Grid: 2 Colunas (Aniversariantes & Clientes sem comprar) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bloco 1: 🎂 Aniversariantes de Hoje / Próximos 7 Dias */}
+        {/* Bloco 1: 🎂 Aniversários */}
         <div className="glass-panel rounded-2xl p-5 border border-pink-500/30 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
@@ -307,7 +406,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* List */}
             <div className="mt-4 space-y-3">
               {birthdayClients.length === 0 ? (
-                <div className="p-6 text-center text-xs text-zinc-400">
+                <div className="p-8 text-center text-xs text-zinc-400 bg-black/20 rounded-xl border border-zinc-800/60">
+                  <Cake className="w-6 h-6 text-zinc-600 mx-auto mb-2 opacity-50" />
                   Nenhum aniversário nos próximos 7 dias.
                 </div>
               ) : (
@@ -351,7 +451,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Quick WhatsApp Birthday Button */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -376,7 +475,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Bloco 2: ⏱️ Clientes sem Comprar (Reativação) */}
+        {/* Bloco 2: ⏱️ Clientes sem Comprar */}
         <div className="glass-panel rounded-2xl p-5 border border-amber-500/30 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
@@ -407,7 +506,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* List */}
             <div className="mt-4 space-y-3">
               {inactiveClients.length === 0 ? (
-                <div className="p-6 text-center text-xs text-zinc-400">
+                <div className="p-8 text-center text-xs text-zinc-400 bg-black/20 rounded-xl border border-zinc-800/60">
+                  <Clock className="w-6 h-6 text-zinc-600 mx-auto mb-2 opacity-50" />
                   Nenhum cliente inativo há mais de 30 dias.
                 </div>
               ) : (
@@ -435,7 +535,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Quick WhatsApp Reactivation Button */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -488,8 +587,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-4 space-y-3">
             {todayReminders.length === 0 ? (
-              <div className="p-6 text-center text-xs text-zinc-400">
-                🎉 Nenhum lembrete pendente para hoje. Parabéns!
+              <div className="p-8 text-center text-xs text-zinc-400 bg-black/20 rounded-xl border border-zinc-800/60 space-y-2">
+                <p>Nenhum lembrete para hoje.</p>
+                <button
+                  type="button"
+                  onClick={onNavigateToReminders}
+                  className="px-3.5 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg text-xs font-bold transition-colors"
+                >
+                  + Criar Lembrete
+                </button>
               </div>
             ) : (
               todayReminders.slice(0, 4).map((rem) => {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   Plus,
@@ -12,13 +12,13 @@ import {
   Edit2,
   ExternalLink,
   Globe,
-  Sparkles,
   Users,
   Layers,
   ChevronRight,
-  Tag,
+  Sparkles,
   Phone,
-  ArrowRight
+  Tag,
+  PackageCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppNotification, Client, CatalogProduct } from '../../types/crm';
@@ -43,6 +43,15 @@ interface HeaderProps {
   onSelectProduct?: (product: CatalogProduct) => void;
 }
 
+// Helper for accent-insensitive and case-insensitive comparison
+const normalizeSearchText = (text: string): string => {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+};
+
 export const Header: React.FC<HeaderProps> = ({
   accountNumber = '004829',
   onUpdateAccountNumber,
@@ -64,7 +73,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [tempAccount, setTempAccount] = useState(accountNumber);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const safeNotifications = notifications || [];
   const unreadCount = safeNotifications.filter((n) => !n.read).length;
@@ -79,11 +87,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Close search results dropdown on outside click or escape
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(event.target as Node)
-      ) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest('[data-search-container]')) {
         setIsSearchFocused(false);
       }
     };
@@ -95,49 +101,65 @@ export const Header: React.FC<HeaderProps> = ({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
-  // Map of product -> clients count with interest
-  const productInterestCountMap = useMemo(() => {
+  // Map of normalized product name -> clients count with interest
+  const productInterestMap = useMemo(() => {
     const map: Record<string, number> = {};
     clients.forEach((c) => {
       c.productsOfInterest?.forEach((prodName) => {
-        const key = prodName.toLowerCase().trim();
-        map[key] = (map[key] || 0) + 1;
+        const normKey = normalizeSearchText(prodName);
+        map[normKey] = (map[normKey] || 0) + 1;
       });
     });
     return map;
   }, [clients]);
 
-  // Search Results for Clients & Products
+  // Robust Search Results for Clients & Products
   const searchResults = useMemo(() => {
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) return { clients: [], products: [] };
+    const rawQuery = searchQuery.trim();
+    if (!rawQuery) {
+      return { clients: [], products: [] };
+    }
 
-    // Search in Clients (by name, whatsapp, city, productsOfInterest)
+    const normQuery = normalizeSearchText(rawQuery);
+    const digitsQuery = rawQuery.replace(/\D/g, '');
+
+    // 1. Search in Clients (by full name & WhatsApp)
     const matchedClients = clients.filter((c) => {
-      const cleanPhone = c.whatsapp.replace(/\D/g, '');
-      const cleanQuery = query.replace(/\D/g, '');
-      return (
-        c.name.toLowerCase().includes(query) ||
-        (cleanQuery && cleanPhone.includes(cleanQuery)) ||
-        c.city?.toLowerCase().includes(query) ||
-        c.productsOfInterest?.some((p) => p.toLowerCase().includes(query))
+      const normClientName = normalizeSearchText(c.name);
+      const cleanPhone = (c.whatsapp || '').replace(/\D/g, '');
+      const normCity = normalizeSearchText(c.city || '');
+
+      const matchesName = normClientName.includes(normQuery);
+      const matchesPhone = digitsQuery.length > 0 && cleanPhone.includes(digitsQuery);
+      const matchesCity = normCity.includes(normQuery);
+      const matchesInterest = c.productsOfInterest?.some((p) =>
+        normalizeSearchText(p).includes(normQuery)
       );
+
+      return matchesName || matchesPhone || matchesCity || matchesInterest;
     });
 
-    // Search in Catalog Products (73 products by name, category, material, description)
+    // 2. Search in Catalog Products (73 products by name, variation/material, category, description)
     const matchedProducts = catalogProducts.filter((p) => {
+      const normName = normalizeSearchText(p.name);
+      const normMaterial = normalizeSearchText(p.material);
+      const normCategory = normalizeSearchText(p.category);
+      const normDescription = normalizeSearchText(p.description || '');
+
       return (
-        p.name.toLowerCase().includes(query) ||
-        p.category.toLowerCase().includes(query) ||
-        p.material.toLowerCase().includes(query) ||
-        p.description?.toLowerCase().includes(query)
+        normName.includes(normQuery) ||
+        normMaterial.includes(normQuery) ||
+        normCategory.includes(normQuery) ||
+        normDescription.includes(normQuery)
       );
     });
 
@@ -152,8 +174,29 @@ export const Header: React.FC<HeaderProps> = ({
   const isSearching = searchQuery.trim().length > 0;
   const showResultsDropdown = isSearching && isSearchFocused;
 
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setIsSearchFocused(false);
+  };
+
+  const handleSelectClient = (client: Client) => {
+    setIsSearchFocused(false);
+    setSearchQuery('');
+    if (onSelectClient) {
+      onSelectClient(client);
+    }
+  };
+
+  const handleSelectProduct = (product: CatalogProduct) => {
+    setIsSearchFocused(false);
+    setSearchQuery('');
+    if (onSelectProduct) {
+      onSelectProduct(product);
+    }
+  };
+
   return (
-    <div className="sticky top-0 z-30 flex flex-col bg-[#09090c]/95 backdrop-blur-xl border-b border-zinc-800/80">
+    <div className="sticky top-0 z-40 flex flex-col bg-[#09090c]/95 backdrop-blur-xl border-b border-zinc-800/80">
       {/* Top Banner / Bar above Main Navigation - Official SurgiLar Site Link */}
       <div className="bg-gradient-to-r from-[#0d0d12] via-[#14121a] to-[#0d0d12] border-b border-rose-500/20 px-3 sm:px-4 lg:px-8 py-1.5 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
@@ -257,9 +300,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center section on Desktop: Integrated Search Bar */}
+        {/* 💻 Center section on Desktop: Integrated Search Bar */}
         <div
-          ref={searchContainerRef}
+          data-search-container="desktop"
           className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl relative mx-2"
         >
           <div className="relative w-full">
@@ -268,18 +311,18 @@ export const Header: React.FC<HeaderProps> = ({
               type="text"
               placeholder="🔎 Pesquisar cliente ou produto..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchFocused(true);
+              }}
               onFocus={() => setIsSearchFocused(true)}
-              className="w-full bg-[#121217] border border-zinc-800 hover:border-rose-500/40 focus:border-rose-500 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-inner focus:ring-2 focus:ring-rose-500/20"
+              className="w-full bg-[#121217] border border-zinc-800 hover:border-rose-500/40 focus:border-rose-500 rounded-xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-inner focus:ring-2 focus:ring-rose-500/20"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setIsSearchFocused(false);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-200 rounded-md"
+                onClick={handleClearSearch}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/80 transition-colors"
                 title="Limpar pesquisa"
               >
                 <X className="w-4 h-4" />
@@ -289,7 +332,10 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Instant Search Results Dropdown for Desktop */}
           {showResultsDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#121217] border border-rose-500/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl max-h-[75vh] flex flex-col">
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#121217] border border-rose-500/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl max-h-[75vh] flex flex-col"
+            >
               {renderSearchResultsContent()}
             </div>
           )}
@@ -411,26 +457,29 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* 📱 MOBILE SEARCH BAR ROW (Full width, large comfortable touch target & thumb typing) */}
-      <div className="md:hidden px-3 sm:px-4 pb-3 pt-0 relative" ref={searchContainerRef}>
-        <div className="relative w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-rose-400 pointer-events-none" />
+      {/* 📱 MOBILE SEARCH BAR ROW (Full width, comfortable touch target, clean keyboard input) */}
+      <div
+        data-search-container="mobile"
+        className="md:hidden px-3 sm:px-4 pb-3 pt-0.5 relative w-full"
+      >
+        <div className="relative w-full flex items-center">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-rose-400 pointer-events-none" />
           <input
             type="text"
             placeholder="🔎 Pesquisar cliente ou produto..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setIsSearchFocused(true);
+            }}
             onFocus={() => setIsSearchFocused(true)}
-            className="w-full h-12 bg-[#121217] border border-zinc-800 hover:border-rose-500/40 focus:border-rose-500 rounded-2xl pl-12 pr-10 text-sm text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-inner focus:ring-2 focus:ring-rose-500/20"
+            className="w-full h-12 bg-[#121217] border border-zinc-800 hover:border-rose-500/40 focus:border-rose-500 rounded-2xl pl-11 pr-11 text-sm sm:text-base text-zinc-100 placeholder-zinc-400 focus:outline-none transition-all shadow-inner focus:ring-2 focus:ring-rose-500/20"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setIsSearchFocused(false);
-              }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-zinc-400 hover:text-white rounded-xl active:bg-zinc-800"
+              onClick={handleClearSearch}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl active:bg-zinc-800 transition-colors"
               title="Limpar pesquisa"
             >
               <X className="w-4 h-4" />
@@ -440,7 +489,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Search Results Overlay Dropdown */}
         {showResultsDropdown && (
-          <div className="absolute top-full left-3 right-3 mt-1 z-50 bg-[#121217] border border-rose-500/40 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl max-h-[70vh] flex flex-col">
+          <div
+            onMouseDown={(e) => e.preventDefault()}
+            className="absolute top-full left-3 right-3 mt-1.5 z-50 bg-[#121217] border border-rose-500/40 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl max-h-[72vh] flex flex-col"
+          >
             {renderSearchResultsContent()}
           </div>
         )}
@@ -452,7 +504,7 @@ export const Header: React.FC<HeaderProps> = ({
     return (
       <>
         {/* Results Header */}
-        <div className="p-3 sm:p-3.5 border-b border-zinc-800 bg-[#16141e] flex items-center justify-between text-xs">
+        <div className="p-3 sm:p-3.5 border-b border-zinc-800 bg-[#16141e] flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-2">
             <Search className="w-4 h-4 text-rose-400" />
             <span className="font-bold text-white font-display">
@@ -462,32 +514,44 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsSearchFocused(false)}
-            className="p-1 text-zinc-400 hover:text-white rounded-md"
+            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            title="Fechar resultados"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Results Scroll Body */}
-        <div className="overflow-y-auto p-3 sm:p-4 space-y-4 divide-y divide-zinc-800/60">
+        <div className="overflow-y-auto p-3 sm:p-4 space-y-4 divide-y divide-zinc-800/60 flex-1">
           {!hasResults ? (
-            <div className="p-6 text-center text-zinc-400 space-y-2">
-              <p className="text-xs sm:text-sm font-semibold text-zinc-300">
-                Nenhum cliente ou produto encontrado para "{searchQuery}".
+            <div className="p-6 text-center text-zinc-400 space-y-2.5">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mx-auto">
+                <Search className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-zinc-200">
+                Não encontramos nenhum cliente ou produto.
               </p>
-              <p className="text-xs text-zinc-400">
-                Verifique se o nome do cliente ou o modelo do móvel está digitado corretamente.
+              <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                Verifique se o nome do cliente, número de WhatsApp ou modelo do móvel está digitado corretamente.
               </p>
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setIsSearchFocused(false);
                     onAddClient();
                   }}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white text-xs font-bold shadow-sm"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5"
                 >
-                  + Cadastrar Novo Cliente
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Cadastrar Novo Cliente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800"
+                >
+                  Limpar busca
                 </button>
               </div>
             </div>
@@ -514,16 +578,12 @@ export const Header: React.FC<HeaderProps> = ({
                       return (
                         <div
                           key={client.id}
-                          onClick={() => {
-                            setIsSearchFocused(false);
-                            setSearchQuery('');
-                            onSelectClient?.(client);
-                          }}
-                          className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/40 cursor-pointer transition-all flex items-center justify-between gap-2 group"
+                          onClick={() => handleSelectClient(client)}
+                          className="p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/50 cursor-pointer transition-all flex items-center justify-between gap-3 group"
                         >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-white text-xs sm:text-sm group-hover:text-rose-300 transition-colors truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-white text-sm group-hover:text-rose-300 transition-colors truncate">
                                 {client.name}
                               </p>
                               <span
@@ -532,20 +592,22 @@ export const Header: React.FC<HeaderProps> = ({
                                 {statusInfo.label}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
-                              <span className="font-mono">{formatPhoneDisplay(client.whatsapp)}</span>
-                              {client.city && <span>• {client.city}</span>}
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1 flex-wrap">
+                              <span className="font-mono text-zinc-300">
+                                📱 {formatPhoneDisplay(client.whatsapp)}
+                              </span>
+                              {client.city && <span>• 📍 {client.city}</span>}
                               {client.productsOfInterest && client.productsOfInterest.length > 0 && (
-                                <span className="text-rose-300/80 truncate">
+                                <span className="text-rose-300/90 truncate">
                                   • Interesse: {client.productsOfInterest.slice(0, 2).join(', ')}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 text-xs font-semibold text-rose-400 group-hover:translate-x-1 transition-transform shrink-0">
-                            <span className="hidden sm:inline-block">Ver Perfil</span>
-                            <ChevronRight className="w-4 h-4" />
+                          <div className="flex items-center gap-1 text-xs font-bold text-rose-400 group-hover:translate-x-0.5 transition-transform shrink-0 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                            <span>Ver Perfil</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </div>
                         </div>
                       );
@@ -567,45 +629,43 @@ export const Header: React.FC<HeaderProps> = ({
 
                   <div className="space-y-1.5">
                     {searchResults.products.map((product) => {
-                      const interestCount =
-                        productInterestCountMap[product.name.toLowerCase().trim()] || 0;
+                      const normProdName = normalizeSearchText(product.name);
+                      const interestCount = productInterestMap[normProdName] || 0;
 
                       return (
                         <div
                           key={product.id}
-                          onClick={() => {
-                            setIsSearchFocused(false);
-                            setSearchQuery('');
-                            onSelectProduct?.(product);
-                          }}
-                          className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/40 cursor-pointer transition-all flex items-center justify-between gap-2 group"
+                          onClick={() => handleSelectProduct(product)}
+                          className="p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/50 cursor-pointer transition-all flex items-center justify-between gap-3 group"
                         >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 shrink-0">
                                 {product.category}
                               </span>
-                              <p className="font-bold text-white text-xs sm:text-sm group-hover:text-rose-300 transition-colors truncate">
+                              <p className="font-bold text-white text-sm group-hover:text-rose-300 transition-colors truncate">
                                 {product.name}
                               </p>
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
-                              <span className="truncate">{product.material}</span>
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1 flex-wrap">
+                              <span className="text-zinc-300">
+                                🎨 {product.material || 'Acabamento Artesanal SurgiLar'}
+                              </span>
                               {interestCount > 0 ? (
                                 <span className="text-pink-300 font-bold px-1.5 py-0.2 rounded bg-pink-500/10 border border-pink-500/20 shrink-0">
                                   ⭐ {interestCount} {interestCount === 1 ? 'cliente interessado' : 'clientes interessados'}
                                 </span>
                               ) : (
-                                <span className="text-zinc-400 italic shrink-0">
+                                <span className="text-zinc-500 italic shrink-0">
                                   Nenhum cliente vinculado ainda
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 text-xs font-semibold text-rose-400 group-hover:translate-x-1 transition-transform shrink-0">
-                            <span className="hidden sm:inline-block">Ver Móvel</span>
-                            <ChevronRight className="w-4 h-4" />
+                          <div className="flex items-center gap-1 text-xs font-bold text-rose-400 group-hover:translate-x-0.5 transition-transform shrink-0 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                            <span>Ver Móvel</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </div>
                         </div>
                       );

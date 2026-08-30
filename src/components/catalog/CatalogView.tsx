@@ -47,6 +47,15 @@ const CATEGORIES: { id: string; label: string; icon: string }[] = [
   { id: 'Puffs', label: 'Puffs', icon: '🛋️' }
 ];
 
+// Helper for accent-insensitive and case-insensitive comparison
+const normalizeSearchText = (text: string): string => {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+};
+
 export const CatalogView: React.FC<CatalogViewProps> = ({
   catalogProducts,
   clients,
@@ -130,8 +139,9 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
     const map: Record<string, Client[]> = {};
     clients.forEach((client) => {
       client.productsOfInterest?.forEach((prodName) => {
-        if (!map[prodName]) map[prodName] = [];
-        map[prodName].push(client);
+        const normKey = normalizeSearchText(prodName);
+        if (!map[normKey]) map[normKey] = [];
+        map[normKey].push(client);
       });
     });
     return map;
@@ -139,16 +149,26 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
 
   // Filtered products
   const filteredProducts = useMemo(() => {
+    const rawQuery = searchQuery.trim();
+    const normQuery = normalizeSearchText(rawQuery);
+
     return catalogProducts.filter((prod) => {
+      const normName = normalizeSearchText(prod.name);
+      const normMaterial = normalizeSearchText(prod.material);
+      const normCategory = normalizeSearchText(prod.category);
+      const normDescription = normalizeSearchText(prod.description || '');
+
       const matchesSearch =
-        prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.material.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.category.toLowerCase().includes(searchQuery.toLowerCase());
+        !rawQuery ||
+        normName.includes(normQuery) ||
+        normMaterial.includes(normQuery) ||
+        normCategory.includes(normQuery) ||
+        normDescription.includes(normQuery);
 
       const matchesCat =
         selectedCategory === 'todos' ||
         (selectedCategory === 'Banquetas'
-          ? prod.category === 'Banquetas' || prod.name.toLowerCase().includes('bistrô')
+          ? prod.category === 'Banquetas' || normName.includes('bistro')
           : prod.category === selectedCategory);
 
       return matchesSearch && matchesCat;
@@ -308,7 +328,7 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence mode="popLayout">
             {filteredProducts.map((product) => {
-              const interestedClients = productInterestMap[product.name] || [];
+              const interestedClients = productInterestMap[normalizeSearchText(product.name)] || [];
               const interestedCount = interestedClients.length;
 
               return (

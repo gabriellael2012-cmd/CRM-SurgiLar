@@ -36,6 +36,15 @@ interface ClientsViewProps {
   setSearchQuery: (q: string) => void;
 }
 
+// Helper for accent-insensitive and case-insensitive comparison
+const normalizeSearchText = (text: string): string => {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+};
+
 export const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
   sales = [],
@@ -55,15 +64,24 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
 
   // Filter and Sort Logic
   const filteredClients = useMemo(() => {
+    const rawQuery = searchQuery.trim();
+    const normQuery = normalizeSearchText(rawQuery);
+    const digitsQuery = rawQuery.replace(/\D/g, '');
+
     return clients
       .filter((client) => {
-        const query = searchQuery.toLowerCase().trim();
+        const normClientName = normalizeSearchText(client.name);
+        const cleanPhone = (client.whatsapp || '').replace(/\D/g, '');
+        const normCity = normalizeSearchText(client.city || '');
+
         const matchesQuery =
-          !query ||
-          client.name.toLowerCase().includes(query) ||
-          client.whatsapp.toLowerCase().includes(query) ||
-          client.city?.toLowerCase().includes(query) ||
-          client.productsOfInterest?.some((p) => p.toLowerCase().includes(query));
+          !rawQuery ||
+          normClientName.includes(normQuery) ||
+          (digitsQuery.length > 0 && cleanPhone.includes(digitsQuery)) ||
+          normCity.includes(normQuery) ||
+          client.productsOfInterest?.some((p) =>
+            normalizeSearchText(p).includes(normQuery)
+          );
 
         const matchesStatus =
           selectedStatus === 'todos' || client.status === selectedStatus;

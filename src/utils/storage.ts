@@ -3,15 +3,40 @@ import { INITIAL_CLIENTS, INITIAL_SALES, INITIAL_NOTIFICATIONS, INITIAL_SETTINGS
 import { SURGILAR_CATALOG_PRODUCTS, RAW_CATALOG_NAMES } from '../data/catalogProducts';
 
 const KEYS = {
-  CLIENTS: 'crm_kely_alves_clients_v3',
-  SALES: 'crm_kely_alves_sales_v3',
-  REMINDERS: 'crm_kely_alves_reminders_v3',
-  NOTIFICATIONS: 'crm_kely_alves_notifications_v3',
-  SETTINGS: 'crm_kely_alves_settings_v3',
-  PRODUCTS: 'crm_kely_alves_products_v3',
-  CATALOG: 'crm_kely_alves_catalog_v3',
-  AUTH: 'crm_kely_alves_auth_v3'
+  CLIENTS: 'crm_kely_alves_clients_v4_clean',
+  SALES: 'crm_kely_alves_sales_v4_clean',
+  REMINDERS: 'crm_kely_alves_reminders_v4_clean',
+  NOTIFICATIONS: 'crm_kely_alves_notifications_v4_clean',
+  SETTINGS: 'crm_kely_alves_settings_v4_clean',
+  PRODUCTS: 'crm_kely_alves_products_v4_clean',
+  CATALOG: 'crm_kely_alves_catalog_v4_clean',
+  AUTH: 'crm_kely_alves_auth_v4_clean'
 };
+
+// Cleanup old legacy version mock keys from localStorage
+export const cleanLegacyMockKeys = (): void => {
+  try {
+    const legacyKeys = [
+      'crm_kely_alves_clients_v1',
+      'crm_kely_alves_sales_v1',
+      'crm_kely_alves_reminders_v1',
+      'crm_kely_alves_notifications_v1',
+      'crm_kely_alves_clients_v2',
+      'crm_kely_alves_sales_v2',
+      'crm_kely_alves_reminders_v2',
+      'crm_kely_alves_notifications_v2',
+      'crm_kely_alves_clients_v3',
+      'crm_kely_alves_sales_v3',
+      'crm_kely_alves_reminders_v3',
+      'crm_kely_alves_notifications_v3'
+    ];
+    legacyKeys.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    // Ignore in SSR / restrictive environments
+  }
+};
+
+cleanLegacyMockKeys();
 
 export const loadCatalogProducts = (): CatalogProduct[] => {
   try {
@@ -21,7 +46,7 @@ export const loadCatalogProducts = (): CatalogProduct[] => {
       return SURGILAR_CATALOG_PRODUCTS;
     }
     const parsed = JSON.parse(data);
-    // If empty or outdated, ensure full catalog
+    // If empty or corrupted, ensure full 73 products catalog is loaded
     if (!Array.isArray(parsed) || parsed.length < 50) {
       localStorage.setItem(KEYS.CATALOG, JSON.stringify(SURGILAR_CATALOG_PRODUCTS));
       return SURGILAR_CATALOG_PRODUCTS;
@@ -86,14 +111,12 @@ export const loadReminders = (): ReminderRecord[] => {
   try {
     const data = localStorage.getItem(KEYS.REMINDERS);
     if (!data) {
-      // Gather initial reminders from initial clients
-      const initialReminders: ReminderRecord[] = INITIAL_CLIENTS.flatMap((c) => c.reminders || []);
-      localStorage.setItem(KEYS.REMINDERS, JSON.stringify(initialReminders));
-      return initialReminders;
+      localStorage.setItem(KEYS.REMINDERS, JSON.stringify([]));
+      return [];
     }
     return JSON.parse(data);
   } catch {
-    return INITIAL_CLIENTS.flatMap((c) => c.reminders || []);
+    return [];
   }
 };
 
@@ -175,14 +198,13 @@ export const saveNotifications = (notifications: AppNotification[]): void => {
 
 export const resetToInitialData = (): void => {
   try {
-    localStorage.setItem(KEYS.CLIENTS, JSON.stringify(INITIAL_CLIENTS));
-    localStorage.setItem(KEYS.SALES, JSON.stringify(INITIAL_SALES));
-    const initialReminders = INITIAL_CLIENTS.flatMap((c) => c.reminders || []);
-    localStorage.setItem(KEYS.REMINDERS, JSON.stringify(initialReminders));
+    localStorage.setItem(KEYS.CLIENTS, JSON.stringify([]));
+    localStorage.setItem(KEYS.SALES, JSON.stringify([]));
+    localStorage.setItem(KEYS.REMINDERS, JSON.stringify([]));
+    localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify([]));
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
     localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(RAW_CATALOG_NAMES));
     localStorage.setItem(KEYS.CATALOG, JSON.stringify(SURGILAR_CATALOG_PRODUCTS));
-    localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(INITIAL_NOTIFICATIONS));
   } catch (e) {
     console.error('Error resetting database', e);
   }
@@ -205,4 +227,3 @@ export const storage = {
   saveNotifications,
   resetToInitialData
 };
-

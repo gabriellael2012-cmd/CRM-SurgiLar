@@ -1,0 +1,15 @@
+{
+  "appId": "br.com.surgilar.crmkely",
+  "appName": "CRM Kely Alves",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#09090c",
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}

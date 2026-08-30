@@ -69,6 +69,8 @@ export interface ReminderRecord {
   observation: string;
   completed: boolean;
   productOfInterest?: string;
+  alertMoments?: string[]; // ['immediate', '5min', '10min', '15min', '30min', '1h', '2h', '1day']
+  title?: string;
 }
 
 export interface Client {
@@ -154,6 +156,22 @@ export interface CatalogProduct {
   featured?: boolean;
 }
 
+export interface NotificationPreferences {
+  enabled: boolean;
+  newClient: boolean;
+  birthdays: boolean;
+  inactivity: boolean;
+  inactivityDays: number; // default: 90
+  followups: boolean;
+  budgets: boolean;
+  schedule: boolean;
+  sales: boolean;
+  reminders: boolean;
+  delayedEvents: boolean;
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+}
+
 export interface SystemSettings {
   accountNumber: string;
   companyName: string;
@@ -163,6 +181,7 @@ export interface SystemSettings {
   defaultWhatsAppTemplate: string;
   availableProducts: string[];
   notificationsEnabled: boolean;
+  notificationPreferences?: NotificationPreferences;
   whatsappDefaultMessage?: string;
 }
 
